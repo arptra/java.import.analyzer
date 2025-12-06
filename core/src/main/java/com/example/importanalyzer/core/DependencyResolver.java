@@ -18,6 +18,18 @@ public class DependencyResolver {
         scanDirectory(mavenCache, jars);
         Path libs = projectRoot.resolve("libs");
         scanDirectory(libs, jars);
+        // Also look for multi-module siblings that have already produced build outputs.
+        Path parent = projectRoot.getParent();
+        if (parent != null && Files.exists(parent)) {
+            try {
+                Files.list(parent)
+                        .filter(Files::isDirectory)
+                        .map(dir -> dir.resolve("build/libs"))
+                        .filter(Files::exists)
+                        .forEach(path -> scanDirectory(path, jars));
+            } catch (IOException ignored) {
+            }
+        }
         return jars;
     }
 

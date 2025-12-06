@@ -38,6 +38,8 @@ A multi-module Gradle project that scans very large Java codebases for import pr
 ```
 ./gradlew :cli:run --args="analyze --project example"
 ```
+The CLI will resolve a relative `--project` path against both the current working directory and the repository root, so the above
+command works whether you run it from the repo root or inside a module directory.
 
 To emit JSON:
 ```

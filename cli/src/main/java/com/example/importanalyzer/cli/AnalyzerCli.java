@@ -27,9 +27,10 @@ public class AnalyzerCli implements Runnable {
     }
 
     private static ImportAnalyzer build(Path project, boolean deps, Integer threads, Path cache, boolean reuse, boolean cacheEnabled) {
+        Path projectRoot = resolveProject(project);
         ImportAnalyzerBuilder builder = new ImportAnalyzerBuilder()
-                .sourceRoot(project.resolve("src/main/java"))
-                .testSourceRoot(project.resolve("src/test/java"))
+                .sourceRoot(projectRoot.resolve("src/main/java"))
+                .testSourceRoot(projectRoot.resolve("src/test/java"))
                 .includeDependencies(deps)
                 .cacheEnabled(cacheEnabled);
         if (threads != null) {
@@ -42,11 +43,24 @@ public class AnalyzerCli implements Runnable {
         return builder.build();
     }
 
+    private static Path resolveProject(Path provided) {
+        if (provided.isAbsolute() && provided.toFile().exists()) {
+            return provided.normalize();
+        }
+        Path cwd = Path.of("").toAbsolutePath();
+        Path direct = cwd.resolve(provided).normalize();
+        if (direct.toFile().exists()) {
+            return direct;
+        }
+        Path parentFallback = cwd.getParent() != null ? cwd.getParent().resolve(provided).normalize() : direct;
+        return parentFallback;
+    }
+
     @CommandLine.Command(name = "analyze", description = "Analyze imports and print console report")
     static class AnalyzeCommand implements Callable<Integer> {
         @CommandLine.Option(names = "--project", required = true)
         Path project;
-        @CommandLine.Option(names = "--with-deps")
+        @CommandLine.Option(names = "--with-deps", defaultValue = "true", description = "Scan project dependencies (default: true)")
         boolean deps;
         @CommandLine.Option(names = "--threads")
         Integer threads;
@@ -71,7 +85,7 @@ public class AnalyzerCli implements Runnable {
     static class JsonCommand implements Callable<Integer> {
         @CommandLine.Option(names = "--project", required = true)
         Path project;
-        @CommandLine.Option(names = "--with-deps")
+        @CommandLine.Option(names = "--with-deps", defaultValue = "true", description = "Scan project dependencies (default: true)")
         boolean deps;
         @CommandLine.Option(names = "--pretty")
         boolean pretty;

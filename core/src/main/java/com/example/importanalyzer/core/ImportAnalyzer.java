@@ -196,7 +196,8 @@ public class ImportAnalyzer {
 
     private void scanDependencies(ClassIndex index) {
         DependencyResolver resolver = new DependencyResolver();
-        Set<Path> jars = resolver.findDependencyJars(Path.of("."));
+        Path projectRoot = config.sourceRoots().isEmpty() ? Path.of(".") : config.sourceRoots().get(0).getParent().getParent();
+        Set<Path> jars = resolver.findDependencyJars(projectRoot);
         var executor = Executors.newFixedThreadPool(Math.max(1, config.threads() / 2));
         List<Callable<Void>> tasks = jars.stream().map(jar -> (Callable<Void>) () -> {
             scanJar(index, jar);
