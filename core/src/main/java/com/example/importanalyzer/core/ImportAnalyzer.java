@@ -152,6 +152,13 @@ public class ImportAnalyzer {
             }
         });
 
+        result.staticWildcardImports().forEach((pkg, line) -> {
+            List<ClassIndexEntry> candidates = index.byPackage(pkg);
+            if (candidates.isEmpty()) {
+                issues.add(new WildcardIssue(result.file(), line, pkg + ".*", "Remove wildcard import; package not found"));
+            }
+        });
+
         // import checks
         result.imports().forEach((fqn, line) -> {
             ClassIndexEntry entry = index.getByFqn(fqn);
@@ -165,6 +172,17 @@ public class ImportAnalyzer {
                     issues.add(new UnresolvedImportIssue(result.file(), line, fqn, "Remove unresolved import or add the missing dependency"));
                 }
             } else if (!result.usedTypes().contains(simple)) {
+                issues.add(new UnusedImportIssue(result.file(), line, simple, "Remove unused import"));
+            }
+        });
+
+        result.staticImports().forEach((fqn, line) -> {
+            String owningType = fqn.contains(".") ? fqn.substring(0, fqn.lastIndexOf('.')) : fqn;
+            ClassIndexEntry entry = index.getByFqn(owningType);
+            String simple = simpleName(fqn);
+            if (entry == null) {
+                issues.add(new UnresolvedImportIssue(result.file(), line, fqn, "Remove unresolved import or add the missing dependency"));
+            } else if (!result.usedIdentifiers().contains(simple)) {
                 issues.add(new UnusedImportIssue(result.file(), line, simple, "Remove unused import"));
             }
         });

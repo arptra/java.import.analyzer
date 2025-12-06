@@ -24,11 +24,21 @@ public final class SourceFileAnalyzer {
 
         Map<String, Integer> imports = new HashMap<>();
         Map<String, Integer> wildcardImports = new HashMap<>();
+        Map<String, Integer> staticImports = new HashMap<>();
+        Map<String, Integer> staticWildcardImports = new HashMap<>();
         cu.getImports().forEach(imp -> {
-            if (imp.isAsterisk()) {
-                wildcardImports.put(imp.getNameAsString(), imp.getBegin().map(p -> p.line).orElse(1));
+            if (imp.isStatic()) {
+                if (imp.isAsterisk()) {
+                    staticWildcardImports.put(imp.getNameAsString(), imp.getBegin().map(p -> p.line).orElse(1));
+                } else {
+                    staticImports.put(imp.getNameAsString(), imp.getBegin().map(p -> p.line).orElse(1));
+                }
             } else {
-                imports.put(imp.getNameAsString(), imp.getBegin().map(p -> p.line).orElse(1));
+                if (imp.isAsterisk()) {
+                    wildcardImports.put(imp.getNameAsString(), imp.getBegin().map(p -> p.line).orElse(1));
+                } else {
+                    imports.put(imp.getNameAsString(), imp.getBegin().map(p -> p.line).orElse(1));
+                }
             }
         });
 
@@ -37,16 +47,38 @@ public final class SourceFileAnalyzer {
         cu.findAll(EnumDeclaration.class).forEach(decl -> declaredTypes.add(decl.getNameAsString()));
         cu.findAll(RecordDeclaration.class).forEach(decl -> declaredTypes.add(decl.getNameAsString()));
 
-        Set<String> used = new HashSet<>();
-        cu.accept(new VoidVisitorAdapter<Set<String>>() {
+        Set<String> usedTypes = new HashSet<>();
+        Set<String> usedIdentifiers = new HashSet<>();
+        cu.accept(new VoidVisitorAdapter<Void>() {
             @Override
-            public void visit(ClassOrInterfaceType n, Set<String> collector) {
-                super.visit(n, collector);
-                collector.add(n.getName().getIdentifier());
+            public void visit(ClassOrInterfaceType n, Void arg) {
+                super.visit(n, arg);
+                usedTypes.add(n.getName().getIdentifier());
             }
-        }, used);
+
+            @Override
+            public void visit(com.github.javaparser.ast.expr.NameExpr n, Void arg) {
+                super.visit(n, arg);
+                usedIdentifiers.add(n.getName().getIdentifier());
+                if (!n.getName().getIdentifier().isEmpty() && Character.isUpperCase(n.getName().getIdentifier().charAt(0))) {
+                    usedTypes.add(n.getName().getIdentifier());
+                }
+            }
+
+            @Override
+            public void visit(com.github.javaparser.ast.expr.MethodCallExpr n, Void arg) {
+                super.visit(n, arg);
+                usedIdentifiers.add(n.getName().getIdentifier());
+            }
+
+            @Override
+            public void visit(com.github.javaparser.ast.expr.FieldAccessExpr n, Void arg) {
+                super.visit(n, arg);
+                usedIdentifiers.add(n.getName().getIdentifier());
+            }
+        }, null);
 
         String pkg = cu.getPackageDeclaration().map(pd -> pd.getName().asString()).orElse("");
-        return new SourceFileResult(file, pkg, imports, wildcardImports, declaredTypes, used);
+        return new SourceFileResult(file, pkg, imports, wildcardImports, staticImports, staticWildcardImports, declaredTypes, usedTypes, usedIdentifiers);
     }
 }

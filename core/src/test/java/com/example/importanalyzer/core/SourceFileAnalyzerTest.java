@@ -20,4 +20,22 @@ class SourceFileAnalyzerTest {
         assertTrue(result.usedTypes().contains("List"));
         Files.deleteIfExists(temp);
     }
+
+    @Test
+    void capturesStaticMembersAndIdentifiers() throws IOException {
+        Path temp = Files.createTempFile("StaticSample", ".java");
+        Files.writeString(temp, """
+                package demo;
+                import static org.junit.jupiter.api.Assertions.assertTrue;
+                import static org.junit.jupiter.api.Assertions.*;
+                import java.nio.file.Path;
+                public class SampleStatic { void test() { assertTrue(true); Path.of("/tmp"); } }
+                """.stripIndent());
+        SourceFileResult result = SourceFileAnalyzer.analyze(temp);
+        assertFalse(result.staticImports().isEmpty());
+        assertFalse(result.staticWildcardImports().isEmpty());
+        assertTrue(result.usedIdentifiers().contains("assertTrue"));
+        assertTrue(result.usedTypes().contains("Path"));
+        Files.deleteIfExists(temp);
+    }
 }
