@@ -146,9 +146,9 @@ public class ImportAnalyzer {
             List<ClassIndexEntry> candidates = index.byPackage(pkg);
             boolean used = candidates.stream().anyMatch(entry -> result.usedTypes().contains(entry.simpleName()));
             if (candidates.isEmpty()) {
-                issues.add(new WildcardIssue(result.file(), line, pkg + ".*", "Package not found"));
+                issues.add(new WildcardIssue(result.file(), line, pkg + ".*", "Remove wildcard import; package not found"));
             } else if (!used) {
-                issues.add(new WildcardIssue(result.file(), line, pkg + ".*", "Wildcard import unused"));
+                issues.add(new WildcardIssue(result.file(), line, pkg + ".*", "Remove unused wildcard import"));
             }
         });
 
@@ -160,12 +160,12 @@ public class ImportAnalyzer {
                 List<ClassIndexEntry> alternatives = index.bySimpleName(simple);
                 if (!alternatives.isEmpty()) {
                     String hint = alternatives.stream().limit(3).map(ClassIndexEntry::fullyQualifiedName).collect(Collectors.joining(", "));
-                    issues.add(new WrongPackageIssue(result.file(), line, fqn, "Did you mean: " + hint));
+                    issues.add(new WrongPackageIssue(result.file(), line, fqn, "Replace with: " + hint));
                 } else {
-                    issues.add(new UnresolvedImportIssue(result.file(), line, fqn, "Import cannot be resolved"));
+                    issues.add(new UnresolvedImportIssue(result.file(), line, fqn, "Remove unresolved import or add the missing dependency"));
                 }
             } else if (!result.usedTypes().contains(simple)) {
-                issues.add(new UnusedImportIssue(result.file(), line, simple, "Import not used"));
+                issues.add(new UnusedImportIssue(result.file(), line, simple, "Remove unused import"));
             }
         });
 
@@ -180,11 +180,11 @@ public class ImportAnalyzer {
             }
             List<ClassIndexEntry> candidates = index.bySimpleName(used);
             if (candidates.isEmpty()) {
-                issues.add(new MissingImportIssue(result.file(), 1, used, "No matching type found"));
+                issues.add(new MissingImportIssue(result.file(), 1, used, "Add missing import or dependency for type " + used));
             } else if (candidates.size() == 1) {
-                issues.add(new MissingImportIssue(result.file(), 1, used, "Import required for " + candidates.get(0).fullyQualifiedName()));
+                issues.add(new MissingImportIssue(result.file(), 1, used, "Add import for " + candidates.get(0).fullyQualifiedName()));
             } else {
-                issues.add(new AmbiguousImportIssue(result.file(), 1, used, "Multiple matches: " + candidates.stream().map(ClassIndexEntry::fullyQualifiedName).collect(Collectors.joining(", "))));
+                issues.add(new AmbiguousImportIssue(result.file(), 1, used, "Choose one import: " + candidates.stream().map(ClassIndexEntry::fullyQualifiedName).collect(Collectors.joining(", "))));
             }
         }
         return issues;
@@ -242,7 +242,8 @@ public class ImportAnalyzer {
                 "java.lang.System",
                 "java.lang.Exception",
                 "java.util.List",
-                "java.util.Map"
+                "java.util.Map",
+                "java.util.Set"
         );
         jdk.forEach(fqn -> index.addEntry(new ClassIndexEntry(fqn, simpleName(fqn), ClassOrigin.JDK, Path.of("<jdk>"))));
     }
