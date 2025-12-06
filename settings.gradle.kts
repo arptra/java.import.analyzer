@@ -1,0 +1,2 @@
+rootProject.name = "java-import-analyzer"
+include("core", "report", "cli", "example")
