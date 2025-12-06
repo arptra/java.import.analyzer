@@ -10,7 +10,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class DependencyResolver {
-    public Set<Path> findDependencyJars(Path projectRoot) {
+    public Set<Path> findDependencyArtifacts(Path projectRoot) {
         Set<Path> jars = new HashSet<>();
         Path gradleCache = Path.of(System.getProperty("user.home"), ".gradle", "caches");
         Path mavenCache = Path.of(System.getProperty("user.home"), ".m2", "repository");
@@ -24,11 +24,23 @@ public class DependencyResolver {
             try {
                 Files.list(parent)
                         .filter(Files::isDirectory)
-                        .map(dir -> dir.resolve("build/libs"))
-                        .filter(Files::exists)
-                        .forEach(path -> scanDirectory(path, jars));
+                        .forEach(dir -> {
+                            Path buildLibs = dir.resolve("build/libs");
+                            if (Files.exists(buildLibs)) {
+                                scanDirectory(buildLibs, jars);
+                            }
+                            Path mainClasses = dir.resolve("build/classes/java/main");
+                            if (Files.exists(mainClasses)) {
+                                jars.add(mainClasses);
+                            }
+                        });
             } catch (IOException ignored) {
             }
+        }
+        // Include current project's compiled classes if available.
+        Path selfClasses = projectRoot.resolve("build/classes/java/main");
+        if (Files.exists(selfClasses)) {
+            jars.add(selfClasses);
         }
         return jars;
     }

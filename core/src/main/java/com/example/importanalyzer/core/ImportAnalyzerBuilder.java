@@ -7,6 +7,7 @@ import java.util.List;
 public class ImportAnalyzerBuilder {
     private final List<Path> sourceRoots = new ArrayList<>();
     private final List<Path> testSourceRoots = new ArrayList<>();
+    private Path projectRoot = Path.of(".");
     private boolean includeDependencies = false;
     private int threads = Runtime.getRuntime().availableProcessors();
     private Path indexCachePath = Path.of(".import-analyzer-cache.json");
@@ -25,6 +26,11 @@ public class ImportAnalyzerBuilder {
 
     public ImportAnalyzerBuilder includeDependencies(boolean include) {
         this.includeDependencies = include;
+        return this;
+    }
+
+    public ImportAnalyzerBuilder projectRoot(Path projectRoot) {
+        this.projectRoot = projectRoot.toAbsolutePath().normalize();
         return this;
     }
 
@@ -49,7 +55,7 @@ public class ImportAnalyzerBuilder {
     }
 
     public ImportAnalyzer build() {
-        ImportAnalyzerConfig config = new ImportAnalyzerConfig(sourceRoots, testSourceRoots, includeDependencies, threads, indexCachePath, reuseIndex, cacheEnabled);
+        ImportAnalyzerConfig config = new ImportAnalyzerConfig(sourceRoots, testSourceRoots, projectRoot, includeDependencies, threads, indexCachePath, reuseIndex, cacheEnabled);
         return new ImportAnalyzer(config);
     }
 }

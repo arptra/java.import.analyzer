@@ -52,6 +52,7 @@ import com.example.importanalyzer.core.*;
 import java.nio.file.Path;
 
 ImportAnalyzer analyzer = new ImportAnalyzerBuilder()
+    .projectRoot(Path.of("."))
     .sourceRoot(Path.of("src/main/java"))
     .testSourceRoot(Path.of("src/test/java"))
     .includeDependencies(true)

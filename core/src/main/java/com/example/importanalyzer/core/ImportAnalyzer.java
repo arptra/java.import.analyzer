@@ -196,11 +196,14 @@ public class ImportAnalyzer {
 
     private void scanDependencies(ClassIndex index) {
         DependencyResolver resolver = new DependencyResolver();
-        Path projectRoot = config.sourceRoots().isEmpty() ? Path.of(".") : config.sourceRoots().get(0).getParent().getParent();
-        Set<Path> jars = resolver.findDependencyJars(projectRoot);
+        Set<Path> artifacts = resolver.findDependencyArtifacts(config.projectRoot());
         var executor = Executors.newFixedThreadPool(Math.max(1, config.threads() / 2));
-        List<Callable<Void>> tasks = jars.stream().map(jar -> (Callable<Void>) () -> {
-            scanJar(index, jar);
+        List<Callable<Void>> tasks = artifacts.stream().map(path -> (Callable<Void>) () -> {
+            if (Files.isDirectory(path)) {
+                scanClassDirectory(index, path);
+            } else {
+                scanJar(index, path);
+            }
             return null;
         }).toList();
         try {
@@ -217,6 +220,28 @@ public class ImportAnalyzer {
             jarFile.stream()
                     .filter(e -> e.getName().endsWith(".class") && !e.isDirectory())
                     .forEach(entry -> addJarEntry(index, entry, jar));
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void scanClassDirectory(ClassIndex index, Path directory) {
+        try {
+            Files.walk(directory)
+                    .filter(path -> path.toString().endsWith(".class"))
+                    .forEach(path -> {
+                        String relative = directory.relativize(path).toString();
+                        if (relative.contains("$")) {
+                            relative = relative.substring(0, relative.indexOf('$')) + ".class";
+                        }
+                        if (relative.endsWith(".class")) {
+                            String fqn = relative.substring(0, relative.length() - 6)
+                                    .replace('/', '.')
+                                    .replace('\\', '.');
+                            if (!fqn.contains("module-info")) {
+                                index.addEntry(new ClassIndexEntry(fqn, simpleName(fqn), ClassOrigin.DEPENDENCY_JAR, directory));
+                            }
+                        }
+                    });
         } catch (IOException ignored) {
         }
     }
@@ -243,7 +268,8 @@ public class ImportAnalyzer {
                 "java.lang.Exception",
                 "java.util.List",
                 "java.util.Map",
-                "java.util.Set"
+                "java.util.Set",
+                "java.nio.file.Path"
         );
         jdk.forEach(fqn -> index.addEntry(new ClassIndexEntry(fqn, simpleName(fqn), ClassOrigin.JDK, Path.of("<jdk>"))));
     }

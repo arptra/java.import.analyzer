@@ -7,15 +7,17 @@ import java.util.List;
 public class ImportAnalyzerConfig {
     private final List<Path> sourceRoots;
     private final List<Path> testSourceRoots;
+    private final Path projectRoot;
     private final boolean includeDependencies;
     private final int threads;
     private final Path indexCachePath;
     private final boolean reuseIndex;
     private final boolean cacheEnabled;
 
-    public ImportAnalyzerConfig(List<Path> sourceRoots, List<Path> testSourceRoots, boolean includeDependencies, int threads, Path indexCachePath, boolean reuseIndex, boolean cacheEnabled) {
+    public ImportAnalyzerConfig(List<Path> sourceRoots, List<Path> testSourceRoots, Path projectRoot, boolean includeDependencies, int threads, Path indexCachePath, boolean reuseIndex, boolean cacheEnabled) {
         this.sourceRoots = List.copyOf(sourceRoots);
         this.testSourceRoots = List.copyOf(testSourceRoots);
+        this.projectRoot = projectRoot;
         this.includeDependencies = includeDependencies;
         this.threads = threads;
         this.indexCachePath = indexCachePath;
@@ -29,6 +31,10 @@ public class ImportAnalyzerConfig {
 
     public List<Path> testSourceRoots() {
         return testSourceRoots;
+    }
+
+    public Path projectRoot() {
+        return projectRoot;
     }
 
     public boolean includeDependencies() {

@@ -18,6 +18,7 @@ class ImportAnalyzerTest {
         Files.writeString(file, "package demo; import java.util.List; import java.util.Set; public class Sample { String name; List<String> names; Map map; }");
 
         ImportAnalyzer analyzer = new ImportAnalyzerBuilder()
+                .projectRoot(root)
                 .sourceRoot(root.resolve("src/main/java"))
                 .includeDependencies(false)
                 .threads(2)

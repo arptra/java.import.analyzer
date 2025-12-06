@@ -29,6 +29,7 @@ public class AnalyzerCli implements Runnable {
     private static ImportAnalyzer build(Path project, boolean deps, Integer threads, Path cache, boolean reuse, boolean cacheEnabled) {
         Path projectRoot = resolveProject(project);
         ImportAnalyzerBuilder builder = new ImportAnalyzerBuilder()
+                .projectRoot(projectRoot)
                 .sourceRoot(projectRoot.resolve("src/main/java"))
                 .testSourceRoot(projectRoot.resolve("src/test/java"))
                 .includeDependencies(deps)

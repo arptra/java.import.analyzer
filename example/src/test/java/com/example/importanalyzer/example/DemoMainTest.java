@@ -13,11 +13,13 @@ class DemoMainTest {
     @Test
     void detectsIssuesInExample() {
         List<ImportIssue> issues = new ImportAnalyzerBuilder()
+                .projectRoot(Path.of("."))
                 .sourceRoot(Path.of("src/main/java"))
-                .includeDependencies(false)
+                .includeDependencies(true)
                 .cacheEnabled(false)
                 .build()
                 .analyze();
         assertFalse(issues.isEmpty());
+        assertTrue(issues.stream().noneMatch(i -> i.symbol().contains("ImportAnalyzer")));
     }
 }
