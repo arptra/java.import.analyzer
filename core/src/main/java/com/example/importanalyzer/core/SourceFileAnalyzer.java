@@ -78,6 +78,12 @@ public final class SourceFileAnalyzer {
             }
         }, null);
 
+        cu.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class)
+                .forEach(annotation -> {
+                    usedIdentifiers.add(annotation.getName().getIdentifier());
+                    usedTypes.add(annotation.getName().getIdentifier());
+                });
+
         String pkg = cu.getPackageDeclaration().map(pd -> pd.getName().asString()).orElse("");
         return new SourceFileResult(file, pkg, imports, wildcardImports, staticImports, staticWildcardImports, declaredTypes, usedTypes, usedIdentifiers);
     }

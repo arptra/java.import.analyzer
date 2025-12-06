@@ -27,4 +27,27 @@ class ImportAnalyzerTest {
         List<ImportIssue> issues = analyzer.analyze();
         assertFalse(issues.isEmpty());
     }
+
+    @Test
+    void respectsImportsUsedInAnnotations() throws Exception {
+        Path root = Files.createTempDirectory("analyzerAnnotations");
+        Path src = root.resolve("src/main/java/demo");
+        Files.createDirectories(src);
+        Path file = src.resolve("SampleTest.java");
+        Files.writeString(file, """
+                package demo;
+                import org.junit.jupiter.api.Test;
+                public class SampleTest { @Test void ok() {} }
+                """.stripIndent());
+
+        ImportAnalyzer analyzer = new ImportAnalyzerBuilder()
+                .projectRoot(root)
+                .sourceRoot(root.resolve("src/main/java"))
+                .includeDependencies(true)
+                .threads(2)
+                .cacheEnabled(false)
+                .build();
+        List<ImportIssue> issues = analyzer.analyze();
+        assertTrue(issues.stream().noneMatch(issue -> issue instanceof UnusedImportIssue), "Annotation imports should be marked as used");
+    }
 }

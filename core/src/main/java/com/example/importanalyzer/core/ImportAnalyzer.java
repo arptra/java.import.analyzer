@@ -11,6 +11,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -166,8 +167,7 @@ public class ImportAnalyzer {
             if (entry == null) {
                 List<ClassIndexEntry> alternatives = index.bySimpleName(simple);
                 if (!alternatives.isEmpty()) {
-                    String hint = alternatives.stream().limit(3).map(ClassIndexEntry::fullyQualifiedName).collect(Collectors.joining(", "));
-                    issues.add(new WrongPackageIssue(result.file(), line, fqn, "Replace with: " + hint));
+                    issues.add(new WrongPackageIssue(result.file(), line, fqn, "Replace with: " + formatCandidates(alternatives)));
                 } else {
                     issues.add(new UnresolvedImportIssue(result.file(), line, fqn, "Remove unresolved import or add the missing dependency"));
                 }
@@ -202,7 +202,7 @@ public class ImportAnalyzer {
             } else if (candidates.size() == 1) {
                 issues.add(new MissingImportIssue(result.file(), 1, used, "Add import for " + candidates.get(0).fullyQualifiedName()));
             } else {
-                issues.add(new AmbiguousImportIssue(result.file(), 1, used, "Choose one import: " + candidates.stream().map(ClassIndexEntry::fullyQualifiedName).collect(Collectors.joining(", "))));
+                issues.add(new AmbiguousImportIssue(result.file(), 1, used, "Choose one import: " + formatCandidates(candidates)));
             }
         }
         return issues;
@@ -210,6 +210,27 @@ public class ImportAnalyzer {
 
     private boolean isJavaLang(String used) {
         return List.of("String", "Object", "System", "Exception", "RuntimeException", "Iterable").contains(used);
+    }
+
+    private String formatCandidates(List<ClassIndexEntry> candidates) {
+        List<ClassIndexEntry> sorted = new ArrayList<>(candidates);
+        sorted.sort(Comparator
+                .comparingInt((ClassIndexEntry e) -> switch (e.origin()) {
+                    case PROJECT_MAIN -> 0;
+                    case PROJECT_TEST -> 1;
+                    case DEPENDENCY_JAR -> 2;
+                    case JDK -> 3;
+                })
+                .thenComparing(ClassIndexEntry::fullyQualifiedName));
+        int limit = 5;
+        String joined = sorted.stream()
+                .limit(limit)
+                .map(ClassIndexEntry::fullyQualifiedName)
+                .collect(Collectors.joining(", "));
+        if (sorted.size() > limit) {
+            joined = joined + " … +" + (sorted.size() - limit) + " more";
+        }
+        return joined;
     }
 
     private void scanDependencies(ClassIndex index) {

@@ -38,4 +38,19 @@ class SourceFileAnalyzerTest {
         assertTrue(result.usedTypes().contains("Path"));
         Files.deleteIfExists(temp);
     }
+
+    @Test
+    void tracksAnnotationUsage() throws IOException {
+        Path temp = Files.createTempFile("AnnotationSample", ".java");
+        Files.writeString(temp, """
+                package demo;
+                import org.junit.jupiter.api.Test;
+                public class SampleAnnotation { @Test void go() {} }
+                """.stripIndent());
+
+        SourceFileResult result = SourceFileAnalyzer.analyze(temp);
+        assertTrue(result.usedTypes().contains("Test"));
+        assertTrue(result.usedIdentifiers().contains("Test"));
+        Files.deleteIfExists(temp);
+    }
 }
