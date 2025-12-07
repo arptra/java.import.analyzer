@@ -50,4 +50,36 @@ class ImportAnalyzerTest {
         List<ImportIssue> issues = analyzer.analyze();
         assertTrue(issues.stream().noneMatch(issue -> issue instanceof UnusedImportIssue), "Annotation imports should be marked as used");
     }
+
+    @Test
+    void reportsMissingPackageWithoutNoisySuggestions() throws Exception {
+        Path root = Files.createTempDirectory("missingPackage");
+        Path src = root.resolve("src/main/java");
+        Files.createDirectories(src.resolve("demo"));
+        Files.createDirectories(src.resolve("other"));
+
+        Path other = src.resolve("other/UnknownType.java");
+        Files.writeString(other, "package other; public class UnknownType {}");
+
+        Path file = src.resolve("demo/Use.java");
+        Files.writeString(file, """
+                package demo;
+                import demo.missing.UnknownType;
+                public class Use { UnknownType field; }
+                """.stripIndent());
+
+        ImportAnalyzer analyzer = new ImportAnalyzerBuilder()
+                .projectRoot(root)
+                .sourceRoot(src)
+                .includeDependencies(false)
+                .threads(2)
+                .cacheEnabled(false)
+                .build();
+
+        List<ImportIssue> issues = analyzer.analyze();
+        assertEquals(1, issues.size());
+        ImportIssue issue = issues.get(0);
+        assertTrue(issue instanceof UnresolvedImportIssue);
+        assertTrue(issue.message().contains("Package demo.missing not found"));
+    }
 }

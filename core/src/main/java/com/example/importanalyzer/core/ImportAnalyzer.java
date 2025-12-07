@@ -165,11 +165,16 @@ public class ImportAnalyzer {
             ClassIndexEntry entry = index.getByFqn(fqn);
             String simple = simpleName(fqn);
             if (entry == null) {
+                String pkg = fqn.contains(".") ? fqn.substring(0, fqn.lastIndexOf('.')) : "";
+                boolean packageKnown = !pkg.isEmpty() && !index.byPackage(pkg).isEmpty();
                 List<ClassIndexEntry> alternatives = index.bySimpleName(simple);
-                if (!alternatives.isEmpty()) {
+                if (packageKnown && !alternatives.isEmpty()) {
                     issues.add(new WrongPackageIssue(result.file(), line, fqn, "Replace with: " + formatCandidates(alternatives)));
                 } else {
-                    issues.add(new UnresolvedImportIssue(result.file(), line, fqn, "Remove unresolved import or add the missing dependency"));
+                    String msg = pkg.isEmpty()
+                            ? "Remove unresolved import or add the missing dependency"
+                            : "Package " + pkg + " not found for import " + fqn;
+                    issues.add(new UnresolvedImportIssue(result.file(), line, fqn, msg));
                 }
             } else if (!result.usedTypes().contains(simple)) {
                 issues.add(new UnusedImportIssue(result.file(), line, simple, "Remove unused import"));
