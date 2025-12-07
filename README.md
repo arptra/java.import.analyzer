@@ -88,6 +88,30 @@ ScanResult result = service.scan(Path.of("/path/to/project/src/main/java/com/exa
 
 The result also includes the target file, the relevant line number (when deletion is needed), and candidate fully qualified class names.
 
+## Работа с API для кодовых агентов (например, Codex)
+Эти подсказки помогают интегрировать сканер в автоматические агенты, которые применяют правки в коде.
+
+### ScanResult: структура ответа
+- **file** — `Path` к файлу, для которого запрошен анализ.
+- **action** — `ImportAction` с инструкцией для агента:
+  - `ADD` — добавить импорт; существует ровно один кандидат.
+  - `DELETE` — удалить импорт, потому что тип недоступен.
+  - `SELECT` — выбрать один из нескольких кандидатов.
+  - `UNKNOWN` — агент не должен менять импорты.
+- **line** — номер строки, когда требуется удаление (`DELETE`) или точка привязки действия.
+- **candidates** — `List<String>` с FQN, которые можно добавить или выбрать.
+- **source** — `ImportSource`, указывается только при `ADD`:
+  - `LOCAL` — кандидат находится в текущем проекте (например, класс из `src/main/java`).
+  - `LIBRARY` — кандидат пришёл из внешних зависимостей/JAR.
+- **progressTotal / progressCompleted** — количество файлов всего и сколько уже обработано; если сканирование ещё идёт, агент может показывать пользователю прогресс и повторить запрос позже.
+
+### Поток работы агента
+1. Вызвать `service.startScan()` для запуска фоновой индексации.
+2. Периодически вызывать `service.scan(targetPath)`:
+   - Если индексация не завершена, получить прогресс (поля `progressCompleted`/`progressTotal`).
+   - После завершения получить итоговое действие и, если `action == ADD`, использовать `source` для решения: предпочитайте `LOCAL`, если он доступен.
+3. Применить правку в файле согласно `action` и выбранному кандидату из `candidates` (при `SELECT` или `ADD`).
+
 ### Publishing locally
 Publish to your Maven Local repository:
 ```
