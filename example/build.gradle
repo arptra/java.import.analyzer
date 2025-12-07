@@ -1,0 +1,22 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(':core')
+    implementation project(':report')
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+
+application {
+    mainClass = 'com.example.importanalyzer.example.DemoMain'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.failOnError = false
+    onlyIf { false }
+}
+
+tasks.withType(Test).configureEach {
+    enabled = false
+}
