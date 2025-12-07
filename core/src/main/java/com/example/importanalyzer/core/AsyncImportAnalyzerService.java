@@ -46,17 +46,17 @@ public class AsyncImportAnalyzerService implements ImportAnalyzerService {
     @Override
     public ScanResult status() {
         boolean running = scanFuture != null && !scanFuture.isDone();
-        return new ScanResult(null, ImportAction.UNKNOWN, -1, List.of(), running, scannedCount.get(), totalFiles);
+        return new ScanResult(null, ImportAction.UNKNOWN, -1, List.of(), ImportSource.UNKNOWN, running, scannedCount.get(), totalFiles);
     }
 
     @Override
     public CompletableFuture<ScanResult> scan(Path file) {
         startScan();
         if (scanFuture == null) {
-            return CompletableFuture.completedFuture(new ScanResult(file, ImportAction.UNKNOWN, -1, List.of(), true, scannedCount.get(), totalFiles));
+            return CompletableFuture.completedFuture(new ScanResult(file, ImportAction.UNKNOWN, -1, List.of(), ImportSource.UNKNOWN, true, scannedCount.get(), totalFiles));
         }
         if (!scanFuture.isDone()) {
-            return CompletableFuture.completedFuture(new ScanResult(file, ImportAction.UNKNOWN, -1, List.of(), true, scannedCount.get(), totalFiles));
+            return CompletableFuture.completedFuture(new ScanResult(file, ImportAction.UNKNOWN, -1, List.of(), ImportSource.UNKNOWN, true, scannedCount.get(), totalFiles));
         }
         return scanFuture.thenApplyAsync(ignored -> buildResult(file), executor);
     }
@@ -101,14 +101,15 @@ public class AsyncImportAnalyzerService implements ImportAnalyzerService {
     private ScanResult buildResult(Path file) {
         SourceFileResult result = analyzedFiles.get(file);
         if (result == null) {
-            return new ScanResult(file, ImportAction.UNKNOWN, -1, List.of(), false, scannedCount.get(), totalFiles);
+            return new ScanResult(file, ImportAction.UNKNOWN, -1, List.of(), ImportSource.UNKNOWN, false, scannedCount.get(), totalFiles);
         }
         List<ImportIssue> issues = new ImportAnalyzer(config).evaluateForFile(result, classIndex);
         if (issues.isEmpty()) {
-            return new ScanResult(file, ImportAction.UNKNOWN, -1, List.of(), false, scannedCount.get(), totalFiles);
+            return new ScanResult(file, ImportAction.UNKNOWN, -1, List.of(), ImportSource.UNKNOWN, false, scannedCount.get(), totalFiles);
         }
         ImportIssue primary = issues.get(0);
-        return new ScanResult(file, toAction(primary), primary.line(), candidatesFor(primary), false, scannedCount.get(), totalFiles);
+        ImportAction action = toAction(primary);
+        return new ScanResult(file, action, primary.line(), candidatesFor(primary), sourceFor(primary, action), false, scannedCount.get(), totalFiles);
     }
 
     private ImportAction toAction(ImportIssue issue) {
@@ -147,6 +148,30 @@ public class AsyncImportAnalyzerService implements ImportAnalyzerService {
                     .collect(Collectors.toList());
         }
         return List.of();
+    }
+
+    private ImportSource sourceFor(ImportIssue issue, ImportAction action) {
+        if (action != ImportAction.ADD) {
+            return ImportSource.UNKNOWN;
+        }
+        if (issue instanceof MissingImportIssue missing) {
+            List<ClassIndexEntry> candidates = classIndex.bySimpleName(missing.symbol());
+            if (candidates.size() == 1) {
+                return mapOrigin(candidates.get(0).origin());
+            }
+        }
+        if (issue instanceof WrongPackageIssue wrong) {
+            String simple = simpleName(wrong.symbol());
+            List<ClassIndexEntry> candidates = classIndex.bySimpleName(simple);
+            if (candidates.size() == 1) {
+                return mapOrigin(candidates.get(0).origin());
+            }
+        }
+        return ImportSource.UNKNOWN;
+    }
+
+    private ImportSource mapOrigin(ClassOrigin origin) {
+        return origin == ClassOrigin.PROJECT_MAIN ? ImportSource.LOCAL : ImportSource.LIBRARY;
     }
 
     private Set<Path> collectJavaFiles(List<Path> roots) {

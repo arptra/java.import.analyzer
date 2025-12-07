@@ -11,6 +11,7 @@ public record ScanResult(
         ImportAction action,
         int line,
         List<String> candidates,
+        ImportSource source,
         boolean inProgress,
         int scannedFiles,
         int totalFiles

@@ -44,6 +44,7 @@ class AsyncImportAnalyzerServiceTest {
         assertEquals(ImportAction.ADD, result.action());
         assertTrue(result.candidates().contains("demo.util.Helper"));
         assertEquals(usage, result.file());
+        assertEquals(ImportSource.LOCAL, result.source());
     }
 
     @Test
@@ -73,6 +74,7 @@ class AsyncImportAnalyzerServiceTest {
         assertEquals(ImportAction.DELETE, result.action());
         assertEquals(usage, result.file());
         assertTrue(result.line() >= 1);
+        assertEquals(ImportSource.UNKNOWN, result.source());
     }
 
     @Test
@@ -126,6 +128,7 @@ class AsyncImportAnalyzerServiceTest {
         assertEquals(fileCount, finalResult.scannedFiles());
         assertEquals(ImportAction.UNKNOWN, finalResult.action());
         assertEquals(target, finalResult.file());
+        assertEquals(ImportSource.UNKNOWN, finalResult.source());
     }
 
     @Test
@@ -166,5 +169,6 @@ class AsyncImportAnalyzerServiceTest {
         assertEquals(usage, result.file());
         assertTrue(result.candidates().contains("demo.one.Helper"));
         assertTrue(result.candidates().contains("demo.two.Helper"));
+        assertEquals(ImportSource.UNKNOWN, result.source());
     }
 }
