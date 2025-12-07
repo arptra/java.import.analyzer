@@ -32,6 +32,27 @@ public class DependencyResolver {
         return jars;
     }
 
+    public Set<Path> findSiblingSourceRoots(Path projectRoot) {
+        Set<Path> roots = new HashSet<>();
+        Path gradleRoot = findGradleRoot(projectRoot);
+        if (!Files.exists(gradleRoot)) {
+            return roots;
+        }
+        try {
+            Files.list(gradleRoot)
+                    .filter(Files::isDirectory)
+                    .filter(dir -> !dir.equals(projectRoot))
+                    .forEach(dir -> {
+                        Path src = dir.resolve("src/main/java");
+                        if (Files.exists(src)) {
+                            roots.add(src);
+                        }
+                    });
+        } catch (IOException ignored) {
+        }
+        return roots;
+    }
+
     Path findGradleRoot(Path start) {
         Path current = start;
         while (current != null) {

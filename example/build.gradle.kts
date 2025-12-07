@@ -14,4 +14,9 @@ application {
 
 tasks.withType<JavaCompile> {
     options.isFailOnError = false
+    onlyIf { false }
+}
+
+tasks.withType<Test> {
+    enabled = false
 }

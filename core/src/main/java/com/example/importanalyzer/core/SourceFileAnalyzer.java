@@ -1,5 +1,6 @@
 package com.example.importanalyzer.core;
 
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -18,6 +19,12 @@ import java.util.Set;
 
 public final class SourceFileAnalyzer {
     private SourceFileAnalyzer() {}
+
+    static {
+        ParserConfiguration configuration = new ParserConfiguration();
+        configuration.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+        StaticJavaParser.setConfiguration(configuration);
+    }
 
     public static SourceFileResult analyze(Path file) throws IOException {
         CompilationUnit cu = StaticJavaParser.parse(Files.readString(file));

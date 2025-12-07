@@ -113,7 +113,8 @@ public class AsyncImportAnalyzerService implements ImportAnalyzerService {
     }
 
     private ImportAction toAction(ImportIssue issue) {
-        if (issue instanceof MissingImportIssue missing) {
+        if (issue instanceof MissingImportIssue) {
+            MissingImportIssue missing = (MissingImportIssue) issue;
             List<ClassIndexEntry> candidates = classIndex.bySimpleName(missing.symbol());
             if (candidates.size() == 1) {
                 return ImportAction.ADD;
@@ -131,17 +132,20 @@ public class AsyncImportAnalyzerService implements ImportAnalyzerService {
     }
 
     private List<String> candidatesFor(ImportIssue issue) {
-        if (issue instanceof MissingImportIssue missing) {
+        if (issue instanceof MissingImportIssue) {
+            MissingImportIssue missing = (MissingImportIssue) issue;
             return classIndex.bySimpleName(missing.symbol()).stream()
                     .map(ClassIndexEntry::fullyQualifiedName)
                     .collect(Collectors.toList());
         }
-        if (issue instanceof AmbiguousImportIssue ambiguous) {
+        if (issue instanceof AmbiguousImportIssue) {
+            AmbiguousImportIssue ambiguous = (AmbiguousImportIssue) issue;
             return classIndex.bySimpleName(ambiguous.symbol()).stream()
                     .map(ClassIndexEntry::fullyQualifiedName)
                     .collect(Collectors.toList());
         }
-        if (issue instanceof WrongPackageIssue wrong) {
+        if (issue instanceof WrongPackageIssue) {
+            WrongPackageIssue wrong = (WrongPackageIssue) issue;
             String simple = simpleName(wrong.symbol());
             return classIndex.bySimpleName(simple).stream()
                     .map(ClassIndexEntry::fullyQualifiedName)
@@ -154,13 +158,15 @@ public class AsyncImportAnalyzerService implements ImportAnalyzerService {
         if (action != ImportAction.ADD) {
             return ImportSource.UNKNOWN;
         }
-        if (issue instanceof MissingImportIssue missing) {
+        if (issue instanceof MissingImportIssue) {
+            MissingImportIssue missing = (MissingImportIssue) issue;
             List<ClassIndexEntry> candidates = classIndex.bySimpleName(missing.symbol());
             if (candidates.size() == 1) {
                 return mapOrigin(candidates.get(0).origin());
             }
         }
-        if (issue instanceof WrongPackageIssue wrong) {
+        if (issue instanceof WrongPackageIssue) {
+            WrongPackageIssue wrong = (WrongPackageIssue) issue;
             String simple = simpleName(wrong.symbol());
             List<ClassIndexEntry> candidates = classIndex.bySimpleName(simple);
             if (candidates.size() == 1) {

@@ -148,4 +148,34 @@ class ImportAnalyzerTest {
         String[] suggestions = list.split(", ");
         assertTrue(suggestions.length <= 5, "Suggestions should be limited to 5 to remain readable");
     }
+
+    @Test
+    void indexesSiblingModuleSourcesSoProjectImportsResolve() throws Exception {
+        Path root = Files.createTempDirectory("multi-root");
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name=\"sample\"");
+
+        Path libSrc = root.resolve("lib/src/main/java/sample/lib");
+        Files.createDirectories(libSrc);
+        Files.writeString(libSrc.resolve("Helper.java"), "package sample.lib; public class Helper {}");
+
+        Path appSrc = root.resolve("app/src/main/java/sample/app");
+        Files.createDirectories(appSrc);
+        Files.writeString(appSrc.resolve("Use.java"), """
+                package sample.app;
+                import sample.lib.Helper;
+                public class Use { Helper h = new Helper(); }
+                """.stripIndent());
+
+        ImportAnalyzer analyzer = new ImportAnalyzerBuilder()
+                .projectRoot(appSrc.getParent().getParent())
+                .sourceRoot(appSrc.getParent())
+                .includeDependencies(true)
+                .cacheEnabled(false)
+                .build();
+
+        List<ImportIssue> issues = analyzer.analyze();
+
+        assertTrue(issues.stream().noneMatch(i -> i instanceof UnresolvedImportIssue),
+                "Sibling module declarations should satisfy dependent imports");
+    }
 }

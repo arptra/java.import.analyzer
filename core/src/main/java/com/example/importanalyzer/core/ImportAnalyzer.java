@@ -18,6 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -60,18 +62,38 @@ public class ImportAnalyzer {
         Set<Path> files = collectJavaFiles(config.sourceRoots());
         files.addAll(collectJavaFiles(config.testSourceRoots()));
 
+        Set<Path> siblingSourceRoots = new HashSet<>();
+        if (config.includeDependencies()) {
+            siblingSourceRoots.addAll(new DependencyResolver().findSiblingSourceRoots(config.projectRoot()));
+        }
+
+        Set<Path> siblingFiles = collectJavaFiles(new ArrayList<>(siblingSourceRoots));
+
         var executor = Executors.newFixedThreadPool(config.threads());
         try {
-            List<Callable<SourceFileResult>> tasks = files.stream().map(path -> (Callable<SourceFileResult>) () -> SourceFileAnalyzer.analyze(path)).toList();
+            List<Callable<SourceFileResult>> tasks = files.stream().map(SourceFileResultCallable::new).map(c -> (Callable<SourceFileResult>) c).toList();
             List<Future<SourceFileResult>> futures = executor.invokeAll(tasks);
-            for (Future<SourceFileResult> future : futures) {
+            for (int i = 0; i < futures.size(); i++) {
                 try {
-                    SourceFileResult result = future.get();
+                    SourceFileResult result = futures.get(i).get();
                     timestamps.put(result.file(), Files.getLastModifiedTime(result.file()).toMillis());
                     registerDeclarations(index, result, config.sourceRoots(), config.testSourceRoots());
                     result.usedTypes().forEach(type -> graph.recordUsage(result.file(), type));
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to analyze source", e);
+                    throw new RuntimeException("Failed to analyze source " + ((SourceFileResultCallable) tasks.get(i)).path(), e);
+                }
+            }
+
+            if (!siblingFiles.isEmpty()) {
+                List<Callable<SourceFileResult>> siblingTasks = siblingFiles.stream().map(SourceFileResultCallable::new).map(c -> (Callable<SourceFileResult>) c).toList();
+                List<Future<SourceFileResult>> siblingFutures = executor.invokeAll(siblingTasks);
+                for (int i = 0; i < siblingFutures.size(); i++) {
+                    try {
+                        SourceFileResult result = siblingFutures.get(i).get();
+                        registerDeclarations(index, result, List.copyOf(siblingSourceRoots), List.of());
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to analyze dependency source " + ((SourceFileResultCallable) siblingTasks.get(i)).path(), e);
+                    }
                 }
             }
         } catch (InterruptedException e) {
@@ -143,6 +165,42 @@ public class ImportAnalyzer {
             }
         }
         return files;
+    }
+
+    private static class SourceFileResultCallable implements Callable<SourceFileResult> {
+        private final Path path;
+
+        SourceFileResultCallable(Path path) {
+            this.path = path;
+        }
+
+        Path path() {
+            return path;
+        }
+
+        @Override
+        public SourceFileResult call() throws Exception {
+            try {
+                return SourceFileAnalyzer.analyze(path);
+            } catch (Exception e) {
+                return fallbackResult();
+            }
+        }
+
+        private SourceFileResult fallbackResult() throws IOException {
+            String content = Files.readString(path);
+            String pkg = "";
+            Matcher pkgMatcher = Pattern.compile("package\\s+([a-zA-Z0-9_.]+)").matcher(content);
+            if (pkgMatcher.find()) {
+                pkg = pkgMatcher.group(1);
+            }
+            Set<String> declared = new HashSet<>();
+            Matcher declMatcher = Pattern.compile("\\b(class|interface|enum|record)\\s+([A-Za-z0-9_]+)").matcher(content);
+            while (declMatcher.find()) {
+                declared.add(declMatcher.group(2));
+            }
+            return new SourceFileResult(path, pkg, Map.of(), Map.of(), Map.of(), Map.of(), declared, Set.of(), Set.of(), Map.of());
+        }
     }
 
     List<ImportIssue> evaluateForFile(SourceFileResult result, ClassIndex index) {
