@@ -81,7 +81,7 @@ public class ImportAnalyzer {
         for (Path file : files) {
             try {
                 SourceFileResult result = SourceFileAnalyzer.analyze(file);
-                issues.addAll(evaluateFile(result, index));
+                issues.addAll(evaluateForFile(result, index));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -136,7 +136,7 @@ public class ImportAnalyzer {
         return files;
     }
 
-    private List<ImportIssue> evaluateFile(SourceFileResult result, ClassIndex index) {
+    List<ImportIssue> evaluateForFile(SourceFileResult result, ClassIndex index) {
         List<ImportIssue> issues = new ArrayList<>();
 
         Map<String, Integer> usedCounts = new HashMap<>();

@@ -55,7 +55,10 @@ public class ImportAnalyzerBuilder {
     }
 
     public ImportAnalyzer build() {
-        ImportAnalyzerConfig config = new ImportAnalyzerConfig(sourceRoots, testSourceRoots, projectRoot, includeDependencies, threads, indexCachePath, reuseIndex, cacheEnabled);
-        return new ImportAnalyzer(config);
+        return new ImportAnalyzer(buildConfig());
+    }
+
+    public ImportAnalyzerConfig buildConfig() {
+        return new ImportAnalyzerConfig(sourceRoots, testSourceRoots, projectRoot, includeDependencies, threads, indexCachePath, reuseIndex, cacheEnabled);
     }
 }

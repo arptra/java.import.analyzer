@@ -64,6 +64,49 @@ ImportAnalyzer analyzer = new ImportAnalyzerBuilder()
 analyzer.analyze();
 ```
 
+### Embedding as a background service
+```java
+ImportAnalyzerConfig config = new ImportAnalyzerBuilder()
+    .projectRoot(Path.of("/path/to/project"))
+    .sourceRoot(Path.of("/path/to/project/src/main/java"))
+    .testSourceRoot(Path.of("/path/to/project/src/test/java"))
+    .includeDependencies(true)
+    .buildConfig();
+
+ImportAnalyzerService service = new AsyncImportAnalyzerService(config);
+service.startScan();
+
+ScanResult result = service.scan(Path.of("/path/to/project/src/main/java/com/example/App.java")).join();
+```
+
+`ScanResult` reports progress while a background scan is running and, once complete, returns the action the user should take:
+
+- `ADD` – add an import (only one candidate exists)
+- `DELETE` – remove an import that cannot be resolved
+- `SELECT` – choose between the provided candidate types
+- `UNKNOWN` – no actionable import change
+
+The result also includes the target file, the relevant line number (when deletion is needed), and candidate fully qualified class names.
+
+### Publishing locally
+Publish to your Maven Local repository:
+```
+./gradlew publishToMavenLocal
+```
+
+Then depend on the core module from another Gradle project:
+```kotlin
+repositories {
+    mavenLocal()
+}
+
+dependencies {
+    implementation("com.example.importanalyzer:core:${version}")
+}
+```
+
+Replace `${version}` with the version defined in this repository's Gradle build.
+
 ## Performance
 - Parallel file discovery and parsing using fixed thread pools.
 - Parallel JAR scanning for dependency class indexes.
