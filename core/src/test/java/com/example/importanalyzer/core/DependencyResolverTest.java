@@ -24,4 +24,18 @@ class DependencyResolverTest {
         assertTrue(artifacts.contains(jar));
         assertEquals(1, artifacts.size(), "Only local outputs/libs should be considered without build metadata");
     }
+
+    @Test
+    void detectsGradleRootAboveSubmodule() throws Exception {
+        Path temp = Files.createTempDirectory("resolver-root");
+        Path root = temp.resolve("repo");
+        Path sub = root.resolve("example");
+        Files.createDirectories(sub);
+        Files.writeString(root.resolve("settings.gradle.kts"), "// root settings");
+
+        DependencyResolver resolver = new DependencyResolver();
+        Path resolved = resolver.findGradleRoot(sub);
+
+        assertEquals(root, resolved);
+    }
 }

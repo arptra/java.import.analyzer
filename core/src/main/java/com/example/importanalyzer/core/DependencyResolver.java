@@ -21,11 +21,26 @@ import java.util.Set;
 public class DependencyResolver {
     public Set<Path> findDependencyArtifacts(Path projectRoot) {
         Set<Path> jars = new HashSet<>();
-        jars.addAll(resolveGradleDependencies(projectRoot));
-        jars.addAll(projectBuildOutputs(projectRoot));
+        Path gradleRoot = findGradleRoot(projectRoot);
+        jars.addAll(resolveGradleDependencies(gradleRoot));
+        jars.addAll(projectBuildOutputs(gradleRoot));
+        if (!gradleRoot.equals(projectRoot)) {
+            jars.addAll(projectBuildOutputs(projectRoot));
+        }
         Path libs = projectRoot.resolve("libs");
         scanDirectory(libs, jars);
         return jars;
+    }
+
+    Path findGradleRoot(Path start) {
+        Path current = start;
+        while (current != null) {
+            if (Files.exists(current.resolve("settings.gradle")) || Files.exists(current.resolve("settings.gradle.kts"))) {
+                return current;
+            }
+            current = current.getParent();
+        }
+        return start;
     }
 
     private Set<Path> projectBuildOutputs(Path projectRoot) {
