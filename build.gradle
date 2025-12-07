@@ -1,0 +1,30 @@
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+
+allprojects {
+    group = 'com.example.importanalyzer'
+    version = '0.1.0'
+
+    repositories {
+        mavenCentral()
+        maven { url = 'https://repo.gradle.org/gradle/libs-releases' }
+    }
+}
+
+subprojects {
+    apply plugin: 'java-library'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.incremental = true
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+}
