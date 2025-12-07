@@ -131,6 +131,9 @@ dependencies {
 
 Replace `${version}` with the version defined in this repository's Gradle build.
 
+### Dependency scope
+Анализатор ограничивает индекс зависимостями, полученными из Gradle Tooling API (runtime/compile classpath) и локальными сборочными каталогами (`build/libs`, `build/classes`). Полный обход `~/.m2` или `~/.gradle/caches` не выполняется, поэтому подсказки по импортам основаны только на реально задекларированных зависимостях проекта и локальных артефактах.
+
 ## Performance
 - Parallel file discovery and parsing using fixed thread pools.
 - Parallel JAR scanning for dependency class indexes.

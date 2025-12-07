@@ -7,6 +7,7 @@ allprojects {
 
     repositories {
         mavenCentral()
+        maven("https://repo.gradle.org/gradle/libs-releases")
     }
 }
 

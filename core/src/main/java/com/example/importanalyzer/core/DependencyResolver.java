@@ -1,48 +1,92 @@
 package com.example.importanalyzer.core;
 
+import org.gradle.tooling.GradleConnector;
+import org.gradle.tooling.ProjectConnection;
+import org.gradle.tooling.model.idea.IdeaDependency;
+import org.gradle.tooling.model.idea.IdeaModule;
+import org.gradle.tooling.model.idea.IdeaProject;
+import org.gradle.tooling.model.idea.IdeaSingleEntryLibraryDependency;
+
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.FileVisitResult;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 
 public class DependencyResolver {
     public Set<Path> findDependencyArtifacts(Path projectRoot) {
         Set<Path> jars = new HashSet<>();
-        Path gradleCache = Path.of(System.getProperty("user.home"), ".gradle", "caches");
-        Path mavenCache = Path.of(System.getProperty("user.home"), ".m2", "repository");
-        scanDirectory(gradleCache, jars);
-        scanDirectory(mavenCache, jars);
+        jars.addAll(resolveGradleDependencies(projectRoot));
+        jars.addAll(projectBuildOutputs(projectRoot));
         Path libs = projectRoot.resolve("libs");
         scanDirectory(libs, jars);
-        // Also look for multi-module siblings that have already produced build outputs.
-        Path parent = projectRoot.getParent();
-        if (parent != null && Files.exists(parent)) {
-            try {
-                Files.list(parent)
-                        .filter(Files::isDirectory)
-                        .forEach(dir -> {
-                            Path buildLibs = dir.resolve("build/libs");
-                            if (Files.exists(buildLibs)) {
-                                scanDirectory(buildLibs, jars);
+        return jars;
+    }
+
+    private Set<Path> projectBuildOutputs(Path projectRoot) {
+        Set<Path> outputs = new HashSet<>();
+        Path buildLibs = projectRoot.resolve("build/libs");
+        scanDirectory(buildLibs, outputs);
+        Path mainClasses = projectRoot.resolve("build/classes/java/main");
+        if (Files.exists(mainClasses)) {
+            outputs.add(mainClasses);
+        }
+        Path testClasses = projectRoot.resolve("build/classes/java/test");
+        if (Files.exists(testClasses)) {
+            outputs.add(testClasses);
+        }
+        return outputs;
+    }
+
+    private Set<Path> resolveGradleDependencies(Path projectRoot) {
+        Set<Path> artifacts = new HashSet<>();
+        boolean gradleProject = Files.exists(projectRoot.resolve("build.gradle"))
+                || Files.exists(projectRoot.resolve("build.gradle.kts"));
+        if (!gradleProject) {
+            return artifacts;
+        }
+
+        ProjectConnection connection = null;
+        try {
+            connection = GradleConnector.newConnector()
+                    .forProjectDirectory(projectRoot.toFile())
+                    .connect();
+            IdeaProject project = connection.getModel(IdeaProject.class);
+            for (IdeaModule module : project.getModules()) {
+                Optional.ofNullable(module.getCompilerOutput())
+                        .ifPresent(output -> {
+                            File mainDir = output.getOutputDir();
+                            if (mainDir != null && mainDir.exists()) {
+                                artifacts.add(mainDir.toPath());
                             }
-                            Path mainClasses = dir.resolve("build/classes/java/main");
-                            if (Files.exists(mainClasses)) {
-                                jars.add(mainClasses);
+                            File testDir = output.getTestOutputDir();
+                            if (testDir != null && testDir.exists()) {
+                                artifacts.add(testDir.toPath());
                             }
                         });
-            } catch (IOException ignored) {
+
+                for (IdeaDependency dependency : module.getDependencies()) {
+                    if (dependency instanceof IdeaSingleEntryLibraryDependency lib) {
+                        File file = lib.getFile();
+                        if (file != null && file.exists()) {
+                            artifacts.add(file.toPath());
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Fallback: rely on local build outputs and libs folder only.
+        } finally {
+            if (connection != null) {
+                connection.close();
             }
         }
-        // Include current project's compiled classes if available.
-        Path selfClasses = projectRoot.resolve("build/classes/java/main");
-        if (Files.exists(selfClasses)) {
-            jars.add(selfClasses);
-        }
-        return jars;
+        return artifacts;
     }
 
     private void scanDirectory(Path dir, Set<Path> jars) {
