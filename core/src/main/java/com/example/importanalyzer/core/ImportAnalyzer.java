@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -315,16 +316,63 @@ public class ImportAnalyzer {
     }
 
     private List<ClassIndexEntry> filterByMembers(List<ClassIndexEntry> candidates, Set<String> members) {
-        if (candidates.isEmpty() || members.isEmpty()) {
+        if (candidates.isEmpty()) {
             return candidates;
         }
-        List<ClassIndexEntry> matching = new ArrayList<>();
+
+        // de-duplicate by FQN to avoid overwhelming suggestions
+        Map<String, ClassIndexEntry> unique = new LinkedHashMap<>();
         for (ClassIndexEntry entry : candidates) {
+            unique.putIfAbsent(entry.fullyQualifiedName(), entry);
+        }
+        List<ClassIndexEntry> deduped = new ArrayList<>(unique.values());
+
+        if (members.isEmpty()) {
+            return deduped;
+        }
+
+        List<ClassIndexEntry> matching = new ArrayList<>();
+        for (ClassIndexEntry entry : deduped) {
             if (supportsMembers(entry, members)) {
                 matching.add(entry);
             }
         }
-        return matching.isEmpty() ? candidates : matching;
+
+        if (!matching.isEmpty()) {
+            return matching;
+        }
+
+        // Heuristic ranking when reflective checks could not validate members (e.g. missing deps)
+        deduped.sort(Comparator.comparingInt((ClassIndexEntry e) -> heuristicScore(e, members)).reversed());
+        int limit = Math.min(5, deduped.size());
+        return deduped.subList(0, limit);
+    }
+
+    private int heuristicScore(ClassIndexEntry entry, Set<String> members) {
+        int score = 0;
+        score += switch (entry.origin()) {
+            case PROJECT_MAIN -> 40;
+            case PROJECT_TEST -> 30;
+            case JDK -> 20;
+            case DEPENDENCY_JAR -> 10;
+        };
+
+        String fqn = entry.fullyQualifiedName();
+        if (fqn.startsWith("org.junit.jupiter.api.Assertions")) {
+            score += 25;
+        }
+        if (fqn.startsWith("org.junit.Assert")) {
+            score += 20;
+        }
+        if (fqn.contains("junit")) {
+            score += 10;
+        }
+        if (members.stream().anyMatch(m -> m.startsWith("assert"))) {
+            if (fqn.contains("assert")) {
+                score += 5;
+            }
+        }
+        return score;
     }
 
     private boolean supportsMembers(ClassIndexEntry entry, Set<String> members) {

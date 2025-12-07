@@ -115,4 +115,37 @@ class ImportAnalyzerTest {
         assertTrue(issues.stream().anyMatch(issue -> issue instanceof MissingImportIssue
                 && issue.message().contains("b.Assertions")), "Should prefer Assertions class that defines assertTrue");
     }
+
+    @Test
+    void limitsAmbiguousSuggestionsWhenMembersUnavailable() throws Exception {
+        Path root = Files.createTempDirectory("assertionsLimit");
+        Path src = root.resolve("src/main/java");
+        Files.createDirectories(src);
+
+        for (int i = 1; i <= 6; i++) {
+            Path pkg = src.resolve("p" + i);
+            Files.createDirectories(pkg);
+            Files.writeString(pkg.resolve("Assertions.java"), "package p" + i + "; public class Assertions {}");
+        }
+
+        Path file = src.resolve("Use.java");
+        Files.writeString(file, """
+                public class Use { void test() { Assertions.assertTrue(true); } }
+                """.stripIndent());
+
+        ImportAnalyzer analyzer = new ImportAnalyzerBuilder()
+                .projectRoot(root)
+                .sourceRoot(src)
+                .includeDependencies(false)
+                .threads(2)
+                .cacheEnabled(false)
+                .build();
+
+        List<ImportIssue> issues = analyzer.analyze();
+        ImportIssue issue = issues.stream().filter(i -> i instanceof AmbiguousImportIssue).findFirst().orElseThrow();
+        String msg = issue.message();
+        String list = msg.substring(msg.indexOf(":") + 1).trim();
+        String[] suggestions = list.split(", ");
+        assertTrue(suggestions.length <= 5, "Suggestions should be limited to 5 to remain readable");
+    }
 }
