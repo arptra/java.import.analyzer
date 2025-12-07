@@ -21,8 +21,12 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -70,18 +74,47 @@ public class ImportAnalyzer {
         Set<Path> siblingFiles = collectJavaFiles(new ArrayList<>(siblingSourceRoots));
 
         var executor = Executors.newFixedThreadPool(config.threads());
+        ScheduledExecutorService progressExecutor = Executors.newSingleThreadScheduledExecutor();
+        var processedCount = new java.util.concurrent.atomic.AtomicInteger();
+        int totalFiles = files.size();
+        if (totalFiles > 0) {
+            progressExecutor.scheduleAtFixedRate(
+                    () -> System.out.printf("Progress: processed %d/%d files%n", processedCount.get(), totalFiles),
+                    30,
+                    30,
+                    TimeUnit.SECONDS);
+        }
         try {
-            List<Callable<SourceFileResult>> tasks = files.stream().map(SourceFileResultCallable::new).map(c -> (Callable<SourceFileResult>) c).toList();
-            List<Future<SourceFileResult>> futures = executor.invokeAll(tasks);
-            for (int i = 0; i < futures.size(); i++) {
+            List<SourceFileResultCallable> tasks = files.stream()
+                    .map(SourceFileResultCallable::new)
+                    .toList();
+
+            CompletionService<SourceFileResult> completionService = new ExecutorCompletionService<>(executor);
+            Map<Future<SourceFileResult>, Path> taskPaths = new ConcurrentHashMap<>();
+            for (SourceFileResultCallable task : tasks) {
+                Future<SourceFileResult> future = completionService.submit(task);
+                taskPaths.put(future, task.path());
+            }
+
+            for (int i = 0; i < tasks.size(); i++) {
+                Future<SourceFileResult> future = completionService.take();
+                Path failingPath = taskPaths.getOrDefault(future, Path.of("<unknown>"));
                 try {
-                    SourceFileResult result = futures.get(i).get();
+                    SourceFileResult result = future.get();
                     timestamps.put(result.file(), Files.getLastModifiedTime(result.file()).toMillis());
                     registerDeclarations(index, result, config.sourceRoots(), config.testSourceRoots());
                     result.usedTypes().forEach(type -> graph.recordUsage(result.file(), type));
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to analyze source " + ((SourceFileResultCallable) tasks.get(i)).path(), e);
+                } catch (ExecutionException e) {
+                    throw new RuntimeException("Failed to analyze source " + failingPath, e.getCause());
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to read metadata for " + failingPath, e);
+                } finally {
+                    processedCount.incrementAndGet();
                 }
+            }
+
+            if (totalFiles > 0) {
+                System.out.printf("Progress: processed %d/%d files%n", processedCount.get(), totalFiles);
             }
 
             if (!siblingFiles.isEmpty()) {
@@ -100,6 +133,7 @@ public class ImportAnalyzer {
             Thread.currentThread().interrupt();
         } finally {
             executor.shutdown();
+            progressExecutor.shutdownNow();
         }
 
         if (config.includeDependencies()) {
