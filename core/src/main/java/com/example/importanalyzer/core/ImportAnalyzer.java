@@ -357,7 +357,7 @@ public class ImportAnalyzer {
         try {
             Class<?> clazz = Class.forName(fqn);
             return hasAllStaticMethods(clazz, members);
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException | LinkageError e) {
             return false;
         }
     }
@@ -371,7 +371,7 @@ public class ImportAnalyzer {
             URLClassLoader loader = loaderCache.computeIfAbsent(location, this::createLoader);
             Class<?> clazz = Class.forName(entry.fullyQualifiedName(), false, loader);
             return hasAllStaticMethods(clazz, members);
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException | LinkageError e) {
             return false;
         }
     }
@@ -386,14 +386,18 @@ public class ImportAnalyzer {
     }
 
     private boolean hasAllStaticMethods(Class<?> clazz, Set<String> members) {
-        List<Method> methods = Arrays.asList(clazz.getMethods());
-        for (String name : members) {
-            boolean found = methods.stream().anyMatch(m -> m.getName().equals(name) && Modifier.isStatic(m.getModifiers()));
-            if (!found) {
-                return false;
+        try {
+            List<Method> methods = Arrays.asList(clazz.getMethods());
+            for (String name : members) {
+                boolean found = methods.stream().anyMatch(m -> m.getName().equals(name) && Modifier.isStatic(m.getModifiers()));
+                if (!found) {
+                    return false;
+                }
             }
+            return true;
+        } catch (LinkageError e) {
+            return false;
         }
-        return true;
     }
 
     private void seedJdk(ClassIndex index) {
