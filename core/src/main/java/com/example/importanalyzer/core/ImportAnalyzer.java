@@ -24,10 +24,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
 public class ImportAnalyzer {
     private final ImportAnalyzerConfig config;
     private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+    private final ConcurrentMap<Path, URLClassLoader> loaderCache = new ConcurrentHashMap<>();
 
     public ImportAnalyzer(ImportAnalyzerConfig config) {
         this.config = config;
@@ -202,12 +210,14 @@ public class ImportAnalyzer {
                 continue;
             }
             List<ClassIndexEntry> candidates = index.bySimpleName(used);
+            Set<String> invokedMembers = result.methodCallsByType().getOrDefault(used, Set.of());
+            List<ClassIndexEntry> narrowed = filterByMembers(candidates, invokedMembers);
             if (candidates.isEmpty()) {
                 issues.add(new MissingImportIssue(result.file(), 1, used, "Add missing import or dependency for type " + used));
-            } else if (candidates.size() == 1) {
-                issues.add(new MissingImportIssue(result.file(), 1, used, "Add import for " + candidates.get(0).fullyQualifiedName()));
+            } else if (narrowed.size() == 1) {
+                issues.add(new MissingImportIssue(result.file(), 1, used, "Add import for " + narrowed.get(0).fullyQualifiedName()));
             } else {
-                issues.add(new AmbiguousImportIssue(result.file(), 1, used, "Choose one import: " + formatCandidates(candidates)));
+                issues.add(new AmbiguousImportIssue(result.file(), 1, used, "Choose one import: " + formatCandidates(narrowed)));
             }
         }
         return issues;
@@ -302,6 +312,88 @@ public class ImportAnalyzer {
     private String simpleName(String fqn) {
         int idx = fqn.lastIndexOf('.') ;
         return idx >=0 ? fqn.substring(idx+1) : fqn;
+    }
+
+    private List<ClassIndexEntry> filterByMembers(List<ClassIndexEntry> candidates, Set<String> members) {
+        if (candidates.isEmpty() || members.isEmpty()) {
+            return candidates;
+        }
+        List<ClassIndexEntry> matching = new ArrayList<>();
+        for (ClassIndexEntry entry : candidates) {
+            if (supportsMembers(entry, members)) {
+                matching.add(entry);
+            }
+        }
+        return matching.isEmpty() ? candidates : matching;
+    }
+
+    private boolean supportsMembers(ClassIndexEntry entry, Set<String> members) {
+        return switch (entry.origin()) {
+            case PROJECT_MAIN, PROJECT_TEST -> supportsMembersFromSource(entry.location(), members);
+            case DEPENDENCY_JAR -> supportsMembersFromArtifact(entry, members);
+            case JDK -> supportsMembersFromJdk(entry.fullyQualifiedName(), members);
+        };
+    }
+
+    private boolean supportsMembersFromSource(Path source, Set<String> members) {
+        if (source == null || !Files.isRegularFile(source)) {
+            return false;
+        }
+        try {
+            var cu = com.github.javaparser.StaticJavaParser.parse(Files.readString(source));
+            var declared = new HashSet<String>();
+            cu.findAll(com.github.javaparser.ast.body.MethodDeclaration.class).forEach(md -> {
+                if (md.isStatic()) {
+                    declared.add(md.getNameAsString());
+                }
+            });
+            return members.stream().allMatch(declared::contains);
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    private boolean supportsMembersFromJdk(String fqn, Set<String> members) {
+        try {
+            Class<?> clazz = Class.forName(fqn);
+            return hasAllStaticMethods(clazz, members);
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    private boolean supportsMembersFromArtifact(ClassIndexEntry entry, Set<String> members) {
+        Path location = entry.location();
+        if (location == null) {
+            return false;
+        }
+        try {
+            URLClassLoader loader = loaderCache.computeIfAbsent(location, this::createLoader);
+            Class<?> clazz = Class.forName(entry.fullyQualifiedName(), false, loader);
+            return hasAllStaticMethods(clazz, members);
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    private URLClassLoader createLoader(Path location) {
+        try {
+            URL url = location.toUri().toURL();
+            return new URLClassLoader(new URL[]{url}, getClass().getClassLoader());
+        } catch (Exception e) {
+            return new URLClassLoader(new URL[]{});
+        }
+    }
+
+    private boolean hasAllStaticMethods(Class<?> clazz, Set<String> members) {
+        List<Method> methods = Arrays.asList(clazz.getMethods());
+        for (String name : members) {
+            boolean found = methods.stream().anyMatch(m -> m.getName().equals(name) && Modifier.isStatic(m.getModifiers()));
+            if (!found) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void seedJdk(ClassIndex index) {

@@ -26,6 +26,7 @@ public final class SourceFileAnalyzer {
         Map<String, Integer> wildcardImports = new HashMap<>();
         Map<String, Integer> staticImports = new HashMap<>();
         Map<String, Integer> staticWildcardImports = new HashMap<>();
+        Map<String, Set<String>> methodCallsByType = new HashMap<>();
         cu.getImports().forEach(imp -> {
             if (imp.isStatic()) {
                 if (imp.isAsterisk()) {
@@ -69,6 +70,13 @@ public final class SourceFileAnalyzer {
             public void visit(com.github.javaparser.ast.expr.MethodCallExpr n, Void arg) {
                 super.visit(n, arg);
                 usedIdentifiers.add(n.getName().getIdentifier());
+                n.getScope().filter(scope -> scope instanceof com.github.javaparser.ast.expr.NameExpr).ifPresent(scope -> {
+                    String qualifier = ((com.github.javaparser.ast.expr.NameExpr) scope).getName().getIdentifier();
+                    if (!qualifier.isEmpty() && Character.isUpperCase(qualifier.charAt(0))) {
+                        usedTypes.add(qualifier);
+                        methodCallsByType.computeIfAbsent(qualifier, k -> new HashSet<>()).add(n.getName().getIdentifier());
+                    }
+                });
             }
 
             @Override
@@ -85,6 +93,6 @@ public final class SourceFileAnalyzer {
                 });
 
         String pkg = cu.getPackageDeclaration().map(pd -> pd.getName().asString()).orElse("");
-        return new SourceFileResult(file, pkg, imports, wildcardImports, staticImports, staticWildcardImports, declaredTypes, usedTypes, usedIdentifiers);
+        return new SourceFileResult(file, pkg, imports, wildcardImports, staticImports, staticWildcardImports, declaredTypes, usedTypes, usedIdentifiers, methodCallsByType);
     }
 }

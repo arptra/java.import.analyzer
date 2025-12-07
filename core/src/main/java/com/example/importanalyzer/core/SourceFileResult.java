@@ -13,6 +13,7 @@ public record SourceFileResult(
         Map<String, Integer> staticWildcardImports,
         Set<String> declaredTypes,
         Set<String> usedTypes,
-        Set<String> usedIdentifiers
+        Set<String> usedIdentifiers,
+        Map<String, Set<String>> methodCallsByType
 ) {
 }

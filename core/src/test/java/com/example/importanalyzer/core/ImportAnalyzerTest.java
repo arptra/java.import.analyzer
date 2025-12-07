@@ -82,4 +82,37 @@ class ImportAnalyzerTest {
         assertTrue(issue instanceof UnresolvedImportIssue);
         assertTrue(issue.message().contains("Package demo.missing not found"));
     }
+
+    @Test
+    void favorsCandidatesProvidingCalledStaticMethods() throws Exception {
+        Path root = Files.createTempDirectory("staticPref");
+        Path src = root.resolve("src/main/java");
+        Files.createDirectories(src.resolve("a"));
+        Files.createDirectories(src.resolve("b"));
+        Files.createDirectories(src.resolve("sample"));
+
+        Path aAssertions = src.resolve("a/Assertions.java");
+        Files.writeString(aAssertions, "package a; public class Assertions { public static void ok() {} }");
+
+        Path bAssertions = src.resolve("b/Assertions.java");
+        Files.writeString(bAssertions, "package b; public class Assertions { public static void assertTrue(boolean val) {} }");
+
+        Path file = src.resolve("sample/Use.java");
+        Files.writeString(file, """
+                package sample;
+                public class Use { void test() { Assertions.assertTrue(true); } }
+                """.stripIndent());
+
+        ImportAnalyzer analyzer = new ImportAnalyzerBuilder()
+                .projectRoot(root)
+                .sourceRoot(src)
+                .includeDependencies(false)
+                .threads(2)
+                .cacheEnabled(false)
+                .build();
+
+        List<ImportIssue> issues = analyzer.analyze();
+        assertTrue(issues.stream().anyMatch(issue -> issue instanceof MissingImportIssue
+                && issue.message().contains("b.Assertions")), "Should prefer Assertions class that defines assertTrue");
+    }
 }
